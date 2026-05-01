@@ -51,7 +51,7 @@ export function Dashboard() {
     checkConnection: checkDriveConnection,
     connect: connectDrive,
     indexDriveFiles,
-    openDrivePicker,
+    indexDriveFolder,
   } = useGoogleDrive();
 
   // Refresh counts
@@ -159,21 +159,18 @@ export function Dashboard() {
     [queryImage, queryName, search]
   );
 
-  // Drive picker
-  const handleDrivePickerOpen = useCallback(async () => {
-    const fileIds = await openDrivePicker();
-    if (fileIds && fileIds.length > 0) {
-      await indexDriveFiles(fileIds, (p) => {
-        setIndexingProgress(p);
-        if (p.status === 'complete') {
-          refreshCounts();
-          setTimeout(() => {
-            setIndexingProgress({ status: 'idle', current: 0, total: 0, errors: [], source: 'google-drive' });
-          }, 3000);
-        }
-      });
-    }
-  }, [openDrivePicker, indexDriveFiles, setIndexingProgress, refreshCounts]);
+  // Drive folder link handler
+  const handleDriveFolderLink = useCallback(async (folderLink: string) => {
+    await indexDriveFolder(folderLink, (p) => {
+      setIndexingProgress(p);
+      if (p.status === 'complete') {
+        refreshCounts();
+        setTimeout(() => {
+          setIndexingProgress({ status: 'idle', current: 0, total: 0, errors: [], source: 'google-drive' });
+        }, 3000);
+      }
+    });
+  }, [indexDriveFolder, setIndexingProgress, refreshCounts]);
 
   // Clear index
   const handleClearIndex = useCallback(async () => {
@@ -243,7 +240,7 @@ export function Dashboard() {
       {!queryImage ? (
         <SearchBar
           onImageSelected={handleImageSelected}
-          onDrivePickerOpen={handleDrivePickerOpen}
+          onDrivePickerOpen={() => alert('Use the "Add Drive Folder" button in the sidebar to paste a Google Drive folder link.')}
           isDriveConnected={isDriveConnected}
         />
       ) : (
@@ -277,7 +274,7 @@ export function Dashboard() {
           driveCount={driveCount}
           onAddLocal={triggerLocalFileSelect}
           onAddFolder={triggerFolderSelect}
-          onAddDrive={handleDrivePickerOpen}
+          onAddDriveFolder={handleDriveFolderLink}
           onRebuildIndex={handleRebuildIndex}
           onClearIndex={handleClearIndex}
         />

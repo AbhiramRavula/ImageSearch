@@ -3,6 +3,7 @@
 // Uses a singleton pattern with lazy initialization.
 
 import * as tf from '@tensorflow/tfjs';
+import '@tensorflow/tfjs-backend-wasm';
 import * as mobilenet from '@tensorflow-models/mobilenet';
 import { MODEL_VERSION, MODEL_INPUT_SIZE } from '../constants';
 
@@ -37,7 +38,7 @@ class MobileNetEmbeddingEngine implements IEmbeddingEngine {
     try {
       // Set backend — prefer webgl, fall back to cpu
       await tf.ready();
-      console.log(`[EmbeddingEngine] TF.js backend: ${tf.getBackend()}`);
+      console.log(`[EmbeddingEngine] TF.js backend initially: ${tf.getBackend()}`);
 
       // Load MobileNet v2 with alpha=1.0
       this.model = await mobilenet.load({
@@ -46,13 +47,27 @@ class MobileNetEmbeddingEngine implements IEmbeddingEngine {
       });
 
       // Warm up with a dummy tensor to avoid first-inference latency
-      const warmupTensor = tf.zeros([1, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 3]);
-      const warmupResult = this.model.infer(warmupTensor as tf.Tensor3D, true);
-      warmupResult.dispose();
-      warmupTensor.dispose();
+      try {
+        const warmupTensor = tf.zeros([1, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 3]);
+        const warmupResult = this.model.infer(warmupTensor as tf.Tensor3D, true);
+        warmupResult.dispose();
+        warmupTensor.dispose();
+      } catch (warmupErr) {
+        console.warn('[EmbeddingEngine] WebGL warmup failed, falling back to WASM backend...', warmupErr);
+        try {
+          await tf.setBackend('wasm');
+        } catch {
+          console.warn('[EmbeddingEngine] WASM backend failed, falling back to CPU...');
+          await tf.setBackend('cpu');
+        }
+        const warmupTensor = tf.zeros([1, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 3]);
+        const warmupResult = this.model.infer(warmupTensor as tf.Tensor3D, true);
+        warmupResult.dispose();
+        warmupTensor.dispose();
+      }
 
       this.ready = true;
-      console.log('[EmbeddingEngine] MobileNet V2 loaded and warmed up');
+      console.log(`[EmbeddingEngine] MobileNet V2 ready on ${tf.getBackend()} backend`);
     } catch (err) {
       console.error('[EmbeddingEngine] Failed to load model:', err);
       throw err;
@@ -66,6 +81,24 @@ class MobileNetEmbeddingEngine implements IEmbeddingEngine {
       await this.initialize();
     }
 
+    try {
+      return this._infer(imageElement);
+    } catch (err: any) {
+      // If context is lost or shaders fail to link during search, fallback to WASM/CPU and retry
+      if (tf.getBackend() === 'webgl' && (err.message?.includes('context') || err.message?.includes('shader') || err.message?.includes('WebGL'))) {
+        console.warn('[EmbeddingEngine] WebGL context lost or failed during inference. Falling back.', err);
+        try {
+          await tf.setBackend('wasm');
+        } catch {
+          await tf.setBackend('cpu');
+        }
+        return this._infer(imageElement);
+      }
+      throw err;
+    }
+  }
+
+  private _infer(imageElement: HTMLImageElement): Float32Array {
     return tf.tidy(() => {
       // MobileNet's infer() with embedding=true returns the penultimate layer (1024-dim)
       const embedding = this.model!.infer(imageElement, true) as tf.Tensor;

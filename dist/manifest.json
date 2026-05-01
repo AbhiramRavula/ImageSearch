@@ -11,7 +11,7 @@
     "offscreen"
   ],
   "oauth2": {
-    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "client_id": "245102192929-6drvl6tuakg1mq4qmbq70mc5hr0v4eoo.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/drive.readonly"
     ]

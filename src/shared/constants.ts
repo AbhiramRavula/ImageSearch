@@ -35,7 +35,7 @@ export const DEFAULT_MAX_RESULTS = 50;
 
 /** Google API configuration — fill these in with your own credentials */
 export const GOOGLE_API_KEY = 'YOUR_GOOGLE_API_KEY';
-export const GOOGLE_CLIENT_ID = 'YOUR_CLIENT_ID.apps.googleusercontent.com';
+export const GOOGLE_CLIENT_ID = '245102192929-6drvl6tuakg1mq4qmbq70mc5hr0v4eoo.apps.googleusercontent.com';
 export const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
 export const GOOGLE_PICKER_API_URL = 'https://apis.google.com/js/api.js';
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { ImageSource } from '../../shared/types';
 
 interface SourceSidebarProps {
@@ -9,7 +9,7 @@ interface SourceSidebarProps {
   driveCount: number;
   onAddLocal: () => void;
   onAddFolder: () => void;
-  onAddDrive: () => void;
+  onAddDriveFolder: (folderLink: string) => void;
   onRebuildIndex: () => void;
   onClearIndex: () => void;
 }
@@ -22,10 +22,20 @@ export function SourceSidebar({
   driveCount,
   onAddLocal,
   onAddFolder,
-  onAddDrive,
+  onAddDriveFolder,
   onRebuildIndex,
   onClearIndex,
 }: SourceSidebarProps) {
+  const [driveFolderLink, setDriveFolderLink] = useState('');
+  const [showDriveInput, setShowDriveInput] = useState(false);
+
+  const handleDriveFolderSubmit = () => {
+    if (!driveFolderLink.trim()) return;
+    onAddDriveFolder(driveFolderLink.trim());
+    setDriveFolderLink('');
+    setShowDriveInput(false);
+  };
+
   return (
     <aside className="sidebar">
       {/* Index Stats */}
@@ -95,10 +105,55 @@ export function SourceSidebar({
           <span>📂</span>
           <span>Add Folder</span>
         </button>
-        <button className="sidebar-action-btn" onClick={onAddDrive}>
+
+        {/* Drive Folder Link */}
+        <button
+          className="sidebar-action-btn"
+          onClick={() => setShowDriveInput(!showDriveInput)}
+          style={showDriveInput ? { borderColor: 'var(--color-accent)', color: 'var(--color-accent)' } : {}}
+        >
           <span>☁️</span>
-          <span>Add from Drive</span>
+          <span>Add Drive Folder</span>
         </button>
+
+        {showDriveInput && (
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-2)',
+            padding: 'var(--space-3)',
+            background: 'var(--color-surface)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--color-border-light)',
+            animation: 'scaleIn 0.2s ease',
+          }}>
+            <input
+              type="text"
+              placeholder="Paste Drive folder link..."
+              value={driveFolderLink}
+              onChange={(e) => setDriveFolderLink(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleDriveFolderSubmit(); }}
+              style={{
+                fontSize: 'var(--font-size-sm)',
+                padding: 'var(--space-2)',
+                width: '100%',
+              }}
+            />
+            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>
+              Paste a link like:<br />
+              drive.google.com/drive/folders/...
+            </div>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleDriveFolderSubmit}
+              disabled={!driveFolderLink.trim()}
+              style={{ width: '100%' }}
+            >
+              Index Folder
+            </button>
+          </div>
+        )}
+
         <button className="sidebar-action-btn" onClick={onRebuildIndex}>
           <span>🔄</span>
           <span>Rebuild Index</span>

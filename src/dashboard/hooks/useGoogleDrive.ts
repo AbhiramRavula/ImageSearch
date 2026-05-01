@@ -11,36 +11,79 @@ import {
 } from '../../shared/utils/image-processing';
 import { addImage, addEmbedding, getImageByHash } from '../../shared/storage/db';
 import type { IndexingProgress, IndexedImage, ImageEmbedding } from '../../shared/types';
-import { MODEL_VERSION, GOOGLE_CLIENT_ID } from '../../shared/constants';
+import { MODEL_VERSION } from '../../shared/constants';
+
+/** Extract a Google Drive folder ID from various URL formats */
+function extractFolderId(input: string): string | null {
+  const trimmed = input.trim();
+
+  // Direct folder ID (no URL)
+  if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  // https://drive.google.com/drive/folders/FOLDER_ID
+  const folderMatch = trimmed.match(/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([a-zA-Z0-9_-]+)/);
+  if (folderMatch) return folderMatch[1];
+
+  // https://drive.google.com/drive/u/0/folders/FOLDER_ID?...
+  const folderMatch2 = trimmed.match(/folders\/([a-zA-Z0-9_-]+)/);
+  if (folderMatch2) return folderMatch2[1];
+
+  return null;
+}
+
+/** List all image files in a specific Drive folder */
+async function listImagesInFolder(
+  folderId: string,
+  token: string
+): Promise<{ files: Array<{ id: string; name: string; mimeType: string }>; error?: string }> {
+  const allFiles: Array<{ id: string; name: string; mimeType: string }> = [];
+  let pageToken: string | undefined;
+
+  try {
+    do {
+      const params = new URLSearchParams({
+        q: `'${folderId}' in parents and mimeType contains 'image/' and trashed = false`,
+        fields: 'nextPageToken,files(id,name,mimeType)',
+        pageSize: '100',
+        orderBy: 'name',
+      });
+      if (pageToken) params.set('pageToken', pageToken);
+
+      const resp = await fetch(
+        `https://www.googleapis.com/drive/v3/files?${params}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!resp.ok) {
+        if (resp.status === 404) return { files: [], error: 'Folder not found. Check the link and make sure you have access.' };
+        if (resp.status === 401 || resp.status === 403) return { files: [], error: 'Permission denied. Sign in again or check folder sharing settings.' };
+        return { files: [], error: `Drive API error: ${resp.status}` };
+      }
+
+      const data = await resp.json();
+      allFiles.push(...(data.files || []));
+      pageToken = data.nextPageToken;
+    } while (pageToken && allFiles.length < 500); // cap at 500 images per folder
+
+    return { files: allFiles };
+  } catch (err) {
+    return { files: [], error: (err as Error).message };
+  }
+}
 
 export function useGoogleDrive() {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const checkConnection = useCallback(async () => {
-    if (GOOGLE_CLIENT_ID === 'YOUR_CLIENT_ID.apps.googleusercontent.com') {
-      setIsConnected(false);
-      return false;
-    }
     const authed = await isAuthenticated();
     setIsConnected(authed);
     return authed;
   }, []);
 
   const connect = useCallback(async () => {
-    if (GOOGLE_CLIENT_ID === 'YOUR_CLIENT_ID.apps.googleusercontent.com') {
-      alert(
-        'Google Drive integration is not configured.\n\n' +
-        'To enable it:\n' +
-        '1. Create a Google Cloud project\n' +
-        '2. Enable Drive API and Picker API\n' +
-        '3. Create an OAuth 2.0 Client ID\n' +
-        '4. Update GOOGLE_CLIENT_ID in src/shared/constants.ts\n' +
-        '5. Update client_id in public/manifest.json'
-      );
-      return null;
-    }
-
     setIsLoading(true);
     try {
       const token = await getAuthToken(true);
@@ -79,7 +122,6 @@ export function useGoogleDrive() {
       const engine = getEmbeddingEngine();
       await engine.initialize();
 
-      // Fetch metadata for all files
       onProgress({
         status: 'indexing',
         current: 0,
@@ -95,11 +137,9 @@ export function useGoogleDrive() {
         const meta = fileMetas[i];
 
         try {
-          // Download the file
           const blob = await downloadFileBlob(meta.id, token);
           const arrayBuffer = await blob.arrayBuffer();
 
-          // Check duplicates
           const hash = await computeContentHash(arrayBuffer);
           const existing = await getImageByHash(hash);
           if (existing) {
@@ -114,18 +154,15 @@ export function useGoogleDrive() {
             continue;
           }
 
-          // Load image for processing
           const dataUrl = URL.createObjectURL(blob);
           const img = await loadImage(dataUrl);
           const dims = getImageDimensions(img);
 
-          // Generate thumbnail & embedding
           const thumbnailBlob = await generateThumbnail(img);
           const vector = await engine.getEmbedding(img);
 
           URL.revokeObjectURL(dataUrl);
 
-          // Store
           const id = generateId();
           const imageRecord: IndexedImage = {
             id,
@@ -167,7 +204,6 @@ export function useGoogleDrive() {
           source: 'google-drive',
         });
 
-        // Yield to UI
         await new Promise((r) => setTimeout(r, 50));
       }
 
@@ -182,43 +218,66 @@ export function useGoogleDrive() {
     []
   );
 
-  // Simple Drive file picker (prompt-based since Google Picker requires external script)
-  const openDrivePicker = useCallback(async (): Promise<string[] | null> => {
-    const token = await connect();
-    if (!token) return null;
-
-    // For now, use a simple Drive API list + prompt approach
-    // Full Google Picker integration would require loading the Picker API in a separate page
-    try {
-      const resp = await fetch(
-        'https://www.googleapis.com/drive/v3/files?' +
-          new URLSearchParams({
-            q: "mimeType contains 'image/' and trashed = false",
-            fields: 'files(id,name,mimeType,thumbnailLink)',
-            pageSize: '50',
-            orderBy: 'modifiedTime desc',
-          }),
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (!resp.ok) throw new Error(`Drive API error: ${resp.status}`);
-
-      const data = await resp.json();
-      const files = data.files || [];
-
-      if (files.length === 0) {
-        alert('No image files found in your Google Drive.');
-        return null;
+  /** Index images from a Drive folder URL or folder ID */
+  const indexDriveFolder = useCallback(
+    async (
+      folderInput: string,
+      onProgress: (progress: IndexingProgress) => void
+    ): Promise<boolean> => {
+      // Extract folder ID from the input
+      const folderId = extractFolderId(folderInput);
+      if (!folderId) {
+        alert(
+          'Invalid Google Drive folder link.\n\n' +
+          'Paste a link like:\nhttps://drive.google.com/drive/folders/ABC123...\n\n' +
+          'Or just the folder ID.'
+        );
+        return false;
       }
 
-      // Return all file IDs — in a real implementation, show a file picker UI
-      return files.map((f: { id: string }) => f.id);
-    } catch (err) {
-      console.error('Drive picker failed:', err);
-      alert(`Failed to list Drive files: ${(err as Error).message}`);
-      return null;
-    }
-  }, [connect]);
+      // Authenticate
+      const token = await connect();
+      if (!token) return false;
+
+      onProgress({
+        status: 'indexing',
+        current: 0,
+        total: 0,
+        errors: [],
+        source: 'google-drive',
+      });
+
+      // List images in the folder
+      const { files, error } = await listImagesInFolder(folderId, token);
+
+      if (error) {
+        alert(`Drive folder error: ${error}`);
+        onProgress({ status: 'idle', current: 0, total: 0, errors: [], source: 'google-drive' });
+        return false;
+      }
+
+      if (files.length === 0) {
+        alert('No image files found in this Drive folder.');
+        onProgress({ status: 'idle', current: 0, total: 0, errors: [], source: 'google-drive' });
+        return false;
+      }
+
+      // Confirm with the user
+      const proceed = confirm(
+        `Found ${files.length} image(s) in this Drive folder.\n\nIndex them now?`
+      );
+      if (!proceed) {
+        onProgress({ status: 'idle', current: 0, total: 0, errors: [], source: 'google-drive' });
+        return false;
+      }
+
+      // Index all files
+      const fileIds = files.map((f) => f.id);
+      await indexDriveFiles(fileIds, onProgress);
+      return true;
+    },
+    [connect, indexDriveFiles]
+  );
 
   return {
     isConnected,
@@ -227,6 +286,6 @@ export function useGoogleDrive() {
     connect,
     disconnect,
     indexDriveFiles,
-    openDrivePicker,
+    indexDriveFolder,
   };
 }
