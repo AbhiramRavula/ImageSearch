@@ -1,0 +1,1 @@
+const a="mobilenet-v2-1.0",e=new Set(["image/jpeg","image/png","image/webp","image/gif","image/bmp","image/svg+xml"]),s=50*1024*1024,i=200,m=224,E="ImageSimilaritySearchDB",g="search-similar-image";export{g as C,E as D,a as M,e as S,i as T,s as a,m as b};
