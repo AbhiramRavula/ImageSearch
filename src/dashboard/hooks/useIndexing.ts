@@ -160,6 +160,74 @@ export function useIndexing() {
     fileInputRef.current?.click();
   }, []);
 
+  /** Open a folder picker and recursively scan for image files */
+  const triggerFolderSelect = useCallback(async () => {
+    try {
+      // showDirectoryPicker is available in Chrome/Edge
+      const dirHandle = await (window as any).showDirectoryPicker({ mode: 'read' });
+      const imageFiles: File[] = [];
+
+      // Recursively collect image files from the folder
+      async function scanDirectory(handle: any, path: string = '') {
+        for await (const entry of handle.values()) {
+          if (entry.kind === 'file') {
+            const file: File = await entry.getFile();
+            if (file.type.startsWith('image/')) {
+              // Preserve folder path in the filename for context
+              const fullName = path ? `${path}/${file.name}` : file.name;
+              const renamedFile = new File([file], fullName, {
+                type: file.type,
+                lastModified: file.lastModified,
+              });
+              imageFiles.push(renamedFile);
+            }
+          } else if (entry.kind === 'directory') {
+            const subPath = path ? `${path}/${entry.name}` : entry.name;
+            await scanDirectory(entry, subPath);
+          }
+        }
+      }
+
+      setProgress({
+        status: 'indexing',
+        current: 0,
+        total: 0,
+        errors: [],
+        source: 'local',
+      });
+
+      await scanDirectory(dirHandle);
+
+      if (imageFiles.length === 0) {
+        setProgress({
+          status: 'error',
+          current: 0,
+          total: 0,
+          errors: ['No image files found in the selected folder.'],
+          source: 'local',
+        });
+        setTimeout(() => {
+          setProgress({ status: 'idle', current: 0, total: 0, errors: [], source: 'local' });
+        }, 3000);
+        return;
+      }
+
+      // Feed collected files into the existing indexing pipeline
+      await indexLocalFiles(imageFiles);
+    } catch (err: any) {
+      // User cancelled the picker — that's fine, ignore AbortError
+      if (err?.name === 'AbortError') return;
+      console.error('Folder selection failed:', err);
+      setProgress({
+        status: 'error',
+        current: 0,
+        total: 0,
+        errors: [`Folder selection failed: ${err.message}`],
+        source: 'local',
+      });
+    }
+  }, [indexLocalFiles, setProgress]);
+
   const handleFileInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files || []);
@@ -174,6 +242,7 @@ export function useIndexing() {
     setProgress,
     indexLocalFiles,
     triggerLocalFileSelect,
+    triggerFolderSelect,
     handleFileInputChange,
     fileInputRef,
   };

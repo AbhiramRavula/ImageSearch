@@ -8,6 +8,7 @@ interface SourceSidebarProps {
   localCount: number;
   driveCount: number;
   onAddLocal: () => void;
+  onAddFolder: () => void;
   onAddDrive: () => void;
   onRebuildIndex: () => void;
   onClearIndex: () => void;
@@ -20,6 +21,7 @@ export function SourceSidebar({
   localCount,
   driveCount,
   onAddLocal,
+  onAddFolder,
   onAddDrive,
   onRebuildIndex,
   onClearIndex,
@@ -88,6 +90,10 @@ export function SourceSidebar({
         <button className="sidebar-action-btn" onClick={onAddLocal}>
           <span>➕</span>
           <span>Add Local Images</span>
+        </button>
+        <button className="sidebar-action-btn" onClick={onAddFolder}>
+          <span>📂</span>
+          <span>Add Folder</span>
         </button>
         <button className="sidebar-action-btn" onClick={onAddDrive}>
           <span>☁️</span>

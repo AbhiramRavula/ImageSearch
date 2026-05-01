@@ -41,6 +41,7 @@ export function Dashboard() {
     setProgress: setIndexingProgress,
     indexLocalFiles,
     triggerLocalFileSelect,
+    triggerFolderSelect,
     handleFileInputChange,
     fileInputRef,
   } = useIndexing();
@@ -275,6 +276,7 @@ export function Dashboard() {
           localCount={localCount}
           driveCount={driveCount}
           onAddLocal={triggerLocalFileSelect}
+          onAddFolder={triggerFolderSelect}
           onAddDrive={handleDrivePickerOpen}
           onRebuildIndex={handleRebuildIndex}
           onClearIndex={handleClearIndex}
