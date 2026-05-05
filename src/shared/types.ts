@@ -16,6 +16,7 @@ export interface IndexedImage {
   contentHash: string;
   thumbnailBlob?: Blob;
   thumbnailUrl?: string; // For Drive thumbnails
+  tags?: string[]; // AI-generated classification labels (from MobileNet)
   createdAt: number;
   indexedAt: number;
 }

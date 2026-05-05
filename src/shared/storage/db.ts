@@ -21,6 +21,28 @@ class ImageSearchDB extends Dexie {
 /** Singleton database instance */
 const db = new ImageSearchDB();
 
+// ── Reading hook: ensure embedding vectors are proper Float32Arrays ──
+// IndexedDB may deserialize typed arrays as plain Objects or ArrayBuffers.
+db.embeddings.hook('reading', (obj) => {
+  if (obj && obj.vector && !(obj.vector instanceof Float32Array)) {
+    const raw: any = obj.vector;
+    if (raw instanceof ArrayBuffer) {
+      obj.vector = new Float32Array(raw);
+    } else if (Array.isArray(raw)) {
+      obj.vector = new Float32Array(raw);
+    } else if (typeof raw === 'object') {
+      // Plain object with numeric keys
+      const keys = Object.keys(raw);
+      const arr = new Float32Array(keys.length);
+      for (let i = 0; i < keys.length; i++) {
+        arr[i] = raw[i] ?? raw[String(i)] ?? 0;
+      }
+      obj.vector = arr;
+    }
+  }
+  return obj;
+});
+
 // ── Image operations ──
 
 export async function addImage(image: IndexedImage): Promise<void> {

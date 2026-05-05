@@ -101,6 +101,22 @@ async function handleMessage(
         break;
       }
 
+      case 'INDEX_FOLDER': {
+        const { imageUrls, folderPath } = message.payload;
+        console.log(`[ServiceWorker] Index folder request: ${imageUrls.length} images from ${folderPath}`);
+        await chrome.storage.session.set({
+          pendingFolderIndex: {
+            imageUrls,
+            folderPath,
+            timestamp: Date.now(),
+          },
+        });
+        const folderDashUrl = chrome.runtime.getURL('src/dashboard/index.html');
+        chrome.tabs.create({ url: `${folderDashUrl}?action=folder-index` });
+        sendResponse({ success: true });
+        break;
+      }
+
       default:
         sendResponse({ error: 'Unknown message type' });
     }

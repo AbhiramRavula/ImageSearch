@@ -13,11 +13,15 @@ export function validateImageFile(file: File): { valid: boolean; error?: string 
   return { valid: true };
 }
 
-/** Load an image from a data URL or blob URL and return an HTMLImageElement */
+/** Load an image from a data URL, blob URL, or file:// URL and return an HTMLImageElement */
 export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    // Don't set crossOrigin for local files or data URLs — CORS doesn't apply
+    // and setting it causes load failures on file:// protocol
+    if (!src.startsWith('data:') && !src.startsWith('blob:') && !src.startsWith('file:')) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error(`Failed to load image: ${src.substring(0, 100)}`));
     img.src = src;

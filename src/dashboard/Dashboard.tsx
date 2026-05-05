@@ -32,7 +32,9 @@ export function Dashboard() {
     searchStatus,
     queryImage,
     queryName,
+    queryText,
     search,
+    searchByText,
     clearSearch,
   } = useSearch();
 
@@ -40,6 +42,7 @@ export function Dashboard() {
     progress: indexingProgress,
     setProgress: setIndexingProgress,
     indexLocalFiles,
+    indexFromUrls,
     triggerLocalFileSelect,
     triggerFolderSelect,
     handleFileInputChange,
@@ -72,30 +75,58 @@ export function Dashboard() {
     checkDriveConnection();
 
     // Check for pending search from context menu or popup
-    chrome.storage?.session?.get('pendingSearch', async (data) => {
-      if (data?.pendingSearch) {
-        const { imageUrl, imageDataUrl } = data.pendingSearch;
-        chrome.storage.session.remove('pendingSearch');
+    // Guard for non-extension contexts (e.g. vite dev mode)
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+        chrome.storage.session.get('pendingSearch', async (data) => {
+          if (data?.pendingSearch) {
+            const { imageUrl, imageDataUrl } = data.pendingSearch;
+            chrome.storage.session.remove('pendingSearch');
 
-        if (imageDataUrl) {
-          search(imageDataUrl, 'Context Menu Image');
-        } else if (imageUrl) {
-          // Fetch the image and search
-          try {
-            const resp = await fetch(imageUrl);
-            const blob = await resp.blob();
-            const reader = new FileReader();
-            reader.onload = () => {
-              search(reader.result as string, imageUrl.split('/').pop() || 'Web Image');
-            };
-            reader.readAsDataURL(blob);
-          } catch (err) {
-            console.error('Failed to load context menu image:', err);
+            if (imageDataUrl) {
+              search(imageDataUrl, 'Context Menu Image');
+            } else if (imageUrl) {
+              // Fetch the image and search
+              try {
+                const resp = await fetch(imageUrl);
+                const blob = await resp.blob();
+                const reader = new FileReader();
+                reader.onload = () => {
+                  search(reader.result as string, imageUrl.split('/').pop() || 'Web Image');
+                };
+                reader.readAsDataURL(blob);
+              } catch (err) {
+                console.error('Failed to load context menu image:', err);
+              }
+            }
           }
-        }
+        });
       }
-    });
+    } catch (err) {
+      console.warn('[Dashboard] chrome.storage not available:', err);
+    }
   }, []);
+
+  // Check for pending folder index (from content script on file:/// pages)
+  useEffect(() => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+        chrome.storage.session.get('pendingFolderIndex', async (data) => {
+          if (data?.pendingFolderIndex) {
+            const { imageUrls, folderPath } = data.pendingFolderIndex;
+            chrome.storage.session.remove('pendingFolderIndex');
+
+            if (imageUrls && imageUrls.length > 0) {
+              console.log(`[Dashboard] Auto-indexing ${imageUrls.length} images from folder: ${folderPath}`);
+              indexFromUrls(imageUrls, folderPath);
+            }
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[Dashboard] Failed to check pending folder index:', err);
+    }
+  }, [indexFromUrls]);
 
   // Refresh counts when indexing completes
   useEffect(() => {
@@ -135,14 +166,27 @@ export function Dashboard() {
     [search, sourceFilter]
   );
 
-  // "Find more like this"
+  // Text search handler
+  const handleTextSearch = useCallback(
+    (query: string) => {
+      searchByText(query, sourceFilter);
+    },
+    [searchByText, sourceFilter]
+  );
+
+  // "Find more like this" — always create a fresh data URL from the blob
+  // to avoid using potentially-revoked object URLs
   const handleFindMore = useCallback(
     (result: ScoredResult) => {
-      if (result.thumbnailObjectUrl) {
+      if (result.image.thumbnailBlob) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          search(reader.result as string, result.image.filename, sourceFilter);
+        };
+        reader.readAsDataURL(result.image.thumbnailBlob);
+      } else if (result.thumbnailObjectUrl) {
+        // Fallback to object URL if no blob available
         search(result.thumbnailObjectUrl, result.image.filename, sourceFilter);
-      } else if (result.image.thumbnailBlob) {
-        const url = URL.createObjectURL(result.image.thumbnailBlob);
-        search(url, result.image.filename, sourceFilter);
       }
     },
     [search, sourceFilter]
@@ -237,13 +281,15 @@ export function Dashboard() {
       </header>
 
       {/* Search Area */}
-      {!queryImage ? (
+      {!queryImage && !queryText ? (
         <SearchBar
           onImageSelected={handleImageSelected}
+          onTextSearch={handleTextSearch}
+          onScanFolder={triggerFolderSelect}
           onDrivePickerOpen={() => alert('Use the "Add Drive Folder" button in the sidebar to paste a Google Drive folder link.')}
           isDriveConnected={isDriveConnected}
         />
-      ) : (
+      ) : queryImage ? (
         <div className="search-area">
           <div className="search-area-inner">
             <QueryPreview
@@ -252,6 +298,20 @@ export function Dashboard() {
               status={searchStatus}
               onClear={clearSearch}
             />
+          </div>
+        </div>
+      ) : (
+        <div className="search-area">
+          <div className="search-area-inner">
+            <div className="text-query-preview">
+              <div className="text-query-preview-icon">✍️</div>
+              <div className="text-query-preview-info">
+                <div className="text-query-preview-label">Text Search</div>
+                <div className="text-query-preview-query">"{queryText}"</div>
+                <div className="text-query-preview-status">{searchStatus}</div>
+              </div>
+              <button className="btn btn-ghost" onClick={clearSearch}>✕ Clear</button>
+            </div>
           </div>
         </div>
       )}
@@ -313,8 +373,9 @@ export function Dashboard() {
           ) : (
             <EmptyState
               hasIndex={totalCount > 0}
-              hasQuery={!!queryImage}
+              hasQuery={!!queryImage || !!queryText}
               onAddImages={triggerLocalFileSelect}
+              onScanFolder={triggerFolderSelect}
             />
           )}
         </main>

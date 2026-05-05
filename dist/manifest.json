@@ -32,7 +32,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/content-script.ts-k2cFuIq0.js"
+        "assets/content-script.ts-DpNhTqH3.js"
       ],
       "matches": [
         "<all_urls>"
@@ -46,6 +46,7 @@
     "128": "icons/icon-128.png"
   },
   "host_permissions": [
+    "file:///*",
     "https://www.googleapis.com/*",
     "https://lh3.googleusercontent.com/*"
   ],
@@ -58,7 +59,7 @@
         "<all_urls>"
       ],
       "resources": [
-        "assets/content-script.ts-k2cFuIq0.js"
+        "assets/content-script.ts-DpNhTqH3.js"
       ],
       "use_dynamic_url": false
     }

@@ -6,6 +6,11 @@ let cachedToken: string | null = null;
 
 /** Get an OAuth token, prompting user to sign in if needed */
 export async function getAuthToken(interactive = true): Promise<string> {
+  // Guard for non-extension contexts (e.g. vite dev mode)
+  if (typeof chrome === 'undefined' || !chrome.identity?.getAuthToken) {
+    throw new Error('Chrome identity API not available. Are you running inside a Chrome extension?');
+  }
+
   if (cachedToken) {
     // Validate the cached token is still good
     try {
@@ -46,6 +51,10 @@ export async function isAuthenticated(): Promise<boolean> {
 /** Sign out and revoke the token */
 export async function signOut(): Promise<void> {
   if (!cachedToken) return;
+  if (typeof chrome === 'undefined' || !chrome.identity?.removeCachedAuthToken) {
+    cachedToken = null;
+    return;
+  }
 
   return new Promise((resolve) => {
     chrome.identity.removeCachedAuthToken({ token: cachedToken! }, () => {

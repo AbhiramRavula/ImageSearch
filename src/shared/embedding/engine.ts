@@ -10,6 +10,7 @@ import { MODEL_VERSION, MODEL_INPUT_SIZE } from '../constants';
 export interface IEmbeddingEngine {
   initialize(): Promise<void>;
   getEmbedding(imageElement: HTMLImageElement): Promise<Float32Array>;
+  classifyImage(imageElement: HTMLImageElement, topK?: number): Promise<{ className: string; probability: number }[]>;
   isReady(): boolean;
   dispose(): void;
   getModelVersion(): string;
@@ -77,6 +78,21 @@ class MobileNetEmbeddingEngine implements IEmbeddingEngine {
 
       return normalized.dataSync() as Float32Array;
     });
+  }
+
+  async classifyImage(
+    imageElement: HTMLImageElement,
+    topK = 5
+  ): Promise<{ className: string; probability: number }[]> {
+    if (!this.model || !this.ready) {
+      await this.initialize();
+    }
+
+    const predictions = await this.model!.classify(imageElement, topK);
+    return predictions.map((p) => ({
+      className: p.className,
+      probability: p.probability,
+    }));
   }
 
   isReady(): boolean {

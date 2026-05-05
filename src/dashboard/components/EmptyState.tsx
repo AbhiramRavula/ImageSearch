@@ -4,9 +4,10 @@ interface EmptyStateProps {
   hasIndex: boolean;
   hasQuery: boolean;
   onAddImages: () => void;
+  onScanFolder: () => void;
 }
 
-export function EmptyState({ hasIndex, hasQuery, onAddImages }: EmptyStateProps) {
+export function EmptyState({ hasIndex, hasQuery, onAddImages, onScanFolder }: EmptyStateProps) {
   if (hasQuery && hasIndex) {
     return (
       <div className="empty-state">
@@ -27,11 +28,16 @@ export function EmptyState({ hasIndex, hasQuery, onAddImages }: EmptyStateProps)
         <div className="empty-state-title">No Images Indexed Yet</div>
         <div className="empty-state-text">
           You need to index some images before searching.
-          Use the sidebar to add local images or connect Google Drive.
+          Scan a folder to get started — all your photos will be analyzed by AI.
         </div>
-        <button className="btn btn-primary" onClick={onAddImages}>
-          ➕ Add Images to Index
-        </button>
+        <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+          <button className="btn btn-primary" onClick={onScanFolder}>
+            📂 Scan a Folder
+          </button>
+          <button className="btn btn-secondary" onClick={onAddImages}>
+            ➕ Add Individual Files
+          </button>
+        </div>
       </div>
     );
   }
@@ -39,16 +45,24 @@ export function EmptyState({ hasIndex, hasQuery, onAddImages }: EmptyStateProps)
   return (
     <div className="empty-state">
       <div className="empty-state-icon">🖼️</div>
-      <div className="empty-state-title">Find Visually Similar Images</div>
+      <div className="empty-state-title">Find Any Photo Instantly</div>
       <div className="empty-state-text">
-        Upload a query image above to search your indexed collection.
-        Start by adding images to your index using the sidebar controls,
-        then search to find visually similar matches ranked by AI similarity score.
+        <strong>Step 1:</strong> Scan a folder of photos — the AI will analyze and index every image.
+        <br />
+        <strong>Step 2:</strong> Search by dropping a reference image or typing what you're looking for.
+        <br />
+        <strong>Step 3:</strong> Get ranked results showing the most similar photos.
       </div>
-      <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-        <button className="btn btn-primary" onClick={onAddImages}>
-          ➕ Add Images
+      <div style={{ display: 'flex', gap: '12px', marginTop: '16px', flexWrap: 'wrap' }}>
+        <button className="btn btn-primary btn-lg" onClick={onScanFolder}>
+          📂 Scan a Folder to Start
         </button>
+        <button className="btn btn-secondary" onClick={onAddImages}>
+          ➕ Add Individual Files
+        </button>
+      </div>
+      <div className="empty-state-hint">
+        💡 Tip: You can also open a folder in Chrome (<code>file:///C:/photos/</code>) and the extension will detect your images automatically.
       </div>
     </div>
   );

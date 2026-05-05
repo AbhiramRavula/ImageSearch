@@ -16,7 +16,8 @@ export type ExtensionMessage =
   | ClearIndexMessage
   | RebuildIndexMessage
   | OpenDashboardMessage
-  | ContextMenuSearchMessage;
+  | ContextMenuSearchMessage
+  | IndexFolderMessage;
 
 // ── Search ──
 export interface SearchImageMessage {
@@ -117,5 +118,13 @@ export interface ContextMenuSearchMessage {
   payload: {
     imageUrl: string;
     pageUrl: string;
+  };
+}
+
+export interface IndexFolderMessage {
+  type: 'INDEX_FOLDER';
+  payload: {
+    imageUrls: string[];
+    folderPath: string;
   };
 }

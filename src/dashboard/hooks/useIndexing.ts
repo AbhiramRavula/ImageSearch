@@ -102,6 +102,17 @@ export function useIndexing() {
             // Generate embedding
             const vector = await engine.getEmbedding(img);
 
+            // Classify image for text search tags
+            let tags: string[] = [];
+            try {
+              const predictions = await engine.classifyImage(img, 5);
+              tags = predictions
+                .filter((p) => p.probability > 0.05)
+                .flatMap((p) => p.className.split(', ').map((t) => t.trim().toLowerCase()));
+            } catch {
+              // Classification is best-effort — don't fail indexing
+            }
+
             // Store in IndexedDB
             const id = generateId();
             const imageRecord: IndexedImage = {
@@ -114,6 +125,7 @@ export function useIndexing() {
               mimeType: file.type,
               contentHash: hash,
               thumbnailBlob,
+              tags,
               createdAt: file.lastModified,
               indexedAt: Date.now(),
             };
@@ -228,6 +240,145 @@ export function useIndexing() {
     }
   }, [indexLocalFiles, setProgress]);
 
+  /** Index images from an array of file:/// URLs (used by folder auto-indexing) */
+  const indexFromUrls = useCallback(async (urls: string[], folderPath?: string) => {
+    if (urls.length === 0) return;
+
+    const errors: string[] = [];
+
+    setProgress({
+      status: 'loading-model',
+      current: 0,
+      total: urls.length,
+      errors,
+      source: 'local',
+    });
+
+    try {
+      const engine = getEmbeddingEngine();
+      await engine.initialize();
+
+      setProgress((prev) => ({ ...prev, status: 'indexing' }));
+
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < urls.length; i += BATCH_SIZE) {
+        const batch = urls.slice(i, i + BATCH_SIZE);
+
+        for (let j = 0; j < batch.length; j++) {
+          const url = batch[j];
+          const current = i + j + 1;
+          const filename = decodeURIComponent(url.split('/').pop() || `image_${current}`);
+
+          try {
+            // Load image directly from file:/// URL
+            const img = await loadImage(url);
+            const dims = getImageDimensions(img);
+
+            // Generate a content hash from a canvas snapshot (since we can't fetch file:// as ArrayBuffer from extension pages reliably)
+            const hashCanvas = document.createElement('canvas');
+            hashCanvas.width = Math.min(img.naturalWidth, 256);
+            hashCanvas.height = Math.min(img.naturalHeight, 256);
+            const hashCtx = hashCanvas.getContext('2d')!;
+            hashCtx.drawImage(img, 0, 0, hashCanvas.width, hashCanvas.height);
+            const hashDataUrl = hashCanvas.toDataURL('image/png');
+            const hashBlob = dataUrlToBlob(hashDataUrl);
+            const hashBuffer = await hashBlob.arrayBuffer();
+            const hash = await computeContentHash(hashBuffer);
+
+            // Check for duplicates
+            const existing = await getImageByHash(hash);
+            if (existing) {
+              setProgress((prev) => ({
+                ...prev,
+                current,
+                errors: [...prev.errors, `${filename}: Duplicate (skipped)`],
+              }));
+              continue;
+            }
+
+            // Generate thumbnail
+            const thumbnailBlob = await generateThumbnail(img);
+
+            // Generate embedding
+            const vector = await engine.getEmbedding(img);
+
+            // Classify image for text search tags
+            let tags: string[] = [];
+            try {
+              const predictions = await engine.classifyImage(img, 5);
+              tags = predictions
+                .filter((p) => p.probability > 0.05)
+                .flatMap((p) => p.className.split(', ').map((t) => t.trim().toLowerCase()));
+            } catch {
+              // Classification is best-effort
+            }
+
+            // Guess mime type from extension
+            const ext = filename.split('.').pop()?.toLowerCase() || '';
+            const mimeMap: Record<string, string> = {
+              jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+              gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp',
+              svg: 'image/svg+xml',
+            };
+            const mimeType = mimeMap[ext] || 'image/unknown';
+
+            // Store in IndexedDB
+            const id = generateId();
+            const imageRecord: IndexedImage = {
+              id,
+              filename,
+              source: 'local',
+              sourceId: url,
+              width: dims.width,
+              height: dims.height,
+              mimeType,
+              contentHash: hash,
+              thumbnailBlob,
+              tags,
+              createdAt: Date.now(),
+              indexedAt: Date.now(),
+            };
+
+            const embeddingRecord: ImageEmbedding = {
+              imageId: id,
+              vector,
+              modelVersion: MODEL_VERSION,
+            };
+
+            await addImage(imageRecord);
+            await addEmbedding(embeddingRecord);
+
+            setProgress((prev) => ({ ...prev, current }));
+          } catch (err) {
+            const errMsg = (err as Error).message;
+            console.warn(`[Indexing] Failed to index ${filename}:`, errMsg);
+            setProgress((prev) => ({
+              ...prev,
+              current: i + j + 1,
+              errors: [...prev.errors, `${filename}: ${errMsg}`],
+            }));
+          }
+        }
+
+        // Yield to UI between batches
+        await new Promise((r) => setTimeout(r, 50));
+      }
+
+      setProgress((prev) => ({ ...prev, status: 'complete' }));
+
+      // Auto-dismiss after 5 seconds
+      setTimeout(() => {
+        setProgress({ status: 'idle', current: 0, total: 0, errors: [], source: 'local' });
+      }, 5000);
+    } catch (err) {
+      setProgress((prev) => ({
+        ...prev,
+        status: 'error',
+        errors: [...prev.errors, `Fatal: ${(err as Error).message}`],
+      }));
+    }
+  }, []);
+
   const handleFileInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files || []);
@@ -241,6 +392,7 @@ export function useIndexing() {
     progress,
     setProgress,
     indexLocalFiles,
+    indexFromUrls,
     triggerLocalFileSelect,
     triggerFolderSelect,
     handleFileInputChange,

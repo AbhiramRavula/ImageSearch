@@ -104,8 +104,12 @@ export function Popup() {
       for (const emb of allEmbeddings) {
         const image = imageMap.get(emb.imageId);
         if (!image) continue;
-        const score = cosineSimilarity(queryEmbedding, emb.vector);
-        scored.push({ image, score });
+        try {
+          const score = cosineSimilarity(queryEmbedding, emb.vector);
+          scored.push({ image, score });
+        } catch (err) {
+          console.warn(`[Popup Search] Skipped embedding for "${image.filename}":`, (err as Error).message);
+        }
       }
 
       scored.sort((a, b) => b.score - a.score);
