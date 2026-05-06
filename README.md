@@ -1,155 +1,183 @@
 # Image Similarity Search — Chrome Extension
 
-> AI-powered reverse image similarity search directly in your browser. Find visually similar images across local files and Google Drive using TensorFlow.js embeddings.
+> AI-powered image search for your local photo collections. Find any photo instantly by dropping a reference image or typing what you're looking for — powered by on-device MobileNet AI.
 
 ![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-blue?logo=googlechrome)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-green)
 ![TensorFlow.js](https://img.shields.io/badge/TensorFlow.js-MobileNet-orange?logo=tensorflow)
+![Privacy](https://img.shields.io/badge/Privacy-100%25%20Local-brightgreen)
 
-## Features
+## ✨ Key Features
 
-- **🔍 Visual Similarity Search** — Upload an image and find visually similar matches using AI embeddings
-- **📁 Local Image Indexing** — Select local files to index for searching
+### 🔍 Dual Search Modes
+- **Search by Image** — Drop a reference photo to find visually similar matches using AI embeddings
+- **Search by Text** — Type what you're looking for (e.g. *"dog"*, *"car"*, *"mountain"*) and AI-detected tags find matching photos
+
+### 📂 Smart Folder Indexing
+- **One-Click Folder Scan** — Select any folder from the dashboard and index all images automatically
+- **Browser Folder Detection** — Open a local folder in Chrome (`file:///C:/photos/`) and the extension auto-detects images and shows a floating panel to index them
+- **Batch Processing** — Handles thousands of photos with progress tracking and duplicate detection
+
+### 🧠 AI-Powered Analysis
+- **Visual Embeddings** — 1024-dimensional MobileNet V2 feature vectors for accurate visual similarity
+- **Auto-Classification** — Each image is classified with ImageNet labels (e.g. "golden retriever", "sports car", "lakeside") for text search
+- **On-Device Processing** — All AI inference runs locally in your browser via TensorFlow.js
+
+### 🛠️ Additional Features
+- **🖱️ Right-Click Search** — Right-click any image on the web → "Search similar images"
+- **📋 Clipboard Paste** — Paste images directly from clipboard to search
 - **☁️ Google Drive Integration** — Connect Google Drive and index cloud images
-- **🖱️ Right-Click Search** — Right-click any image on the web to "Search similar images"
-- **📋 Clipboard Paste** — Paste images directly from clipboard
-- **🌗 Dark Mode** — Automatic light/dark theme with manual toggle
-- **🔒 Privacy First** — All processing happens locally, no images uploaded to servers
-- **⚡ Fast** — MobileNet V2 embeddings with cosine similarity scoring
+- **🌗 Theme Support** — Light / Dark / System with smooth transitions
+- **🔒 100% Private** — Zero data leaves your browser. No servers, no uploads, no tracking.
 
-## Quick Start
+## 🚀 Quick Start
 
-### 1. Install Dependencies
+### 1. Install & Build
 
 ```bash
 cd ImgSearch
 npm install
-```
-
-### 2. Build the Extension
-
-```bash
 npm run build
 ```
 
-### 3. Load in Chrome/Edge
+### 2. Load in Chrome
 
-1. Open `chrome://extensions/` (or `edge://extensions/`)
-2. Enable **Developer mode** (toggle in top-right)
-3. Click **"Load unpacked"**
-4. Select the `dist/` folder from this project
+1. Open `chrome://extensions/`
+2. Enable **Developer mode** (toggle top-right)
+3. Click **"Load unpacked"** → select the `dist/` folder
+4. Click **"Details"** on the extension → enable **"Allow access to file URLs"**
 
-### 4. Start Using
+### 3. Start Using
 
-1. Click the extension icon to open the **popup** for quick search
-2. Click **"Open Dashboard"** for the full experience
-3. In the dashboard, use **"Add Local Images"** in the sidebar to index images
-4. Upload a query image to search for similar matches!
+**Option A — Dashboard (recommended):**
+1. Click the extension icon → **"Open Dashboard"**
+2. Click **"📂 Scan a Folder to Start"**
+3. Select your photos folder → AI indexes every image
+4. Search by **image** (drag & drop) or **text** (type a description)
 
-## Development
+**Option B — Browser Folder Detection:**
+1. Paste a folder path in Chrome: `file:///C:/Users/you/Pictures/`
+2. The extension detects images → a floating panel appears
+3. Click **"⚡ Index All"** → Dashboard opens and indexes automatically
+4. Search your photos!
+
+**Option C — Right-Click Search:**
+1. Right-click any image on any webpage
+2. Click **"Search similar images"**
+3. Dashboard opens with results from your indexed collection
+
+## 🏗️ Architecture
+
+```
+src/
+├── popup/                # Compact popup UI (quick search)
+├── dashboard/            # Full-page dashboard
+│   ├── components/       # SearchBar, ResultsGrid, EmptyState, etc.
+│   └── hooks/            # useSearch, useIndexing, useGoogleDrive
+├── background/           # Service worker (context menu, message routing)
+├── content/              # Content script (folder detection, right-click support)
+├── shared/
+│   ├── embedding/        # MobileNet engine + cosine similarity
+│   ├── storage/          # IndexedDB via Dexie (images + embeddings)
+│   ├── google/           # OAuth + Drive API helpers
+│   └── utils/            # Image processing, hashing, constants
+└── styles/               # CSS design system (light/dark themes)
+```
+
+### How It Works
+
+```
+┌─────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Your Photo  │────▸│  MobileNet   │────▸│  1024-dim    │
+│  Collection  │     │  V2 Model    │     │  Embedding   │
+└─────────────┘     └──────────────┘     └──────┬───────┘
+                                                 │
+                    ┌──────────────┐              │ Store
+                    │  IndexedDB   │◂─────────────┘
+                    │  (Dexie.js)  │
+                    └──────┬───────┘
+                           │ Compare
+┌─────────────┐     ┌──────▾───────┐     ┌──────────────┐
+│ Query Image  │────▸│   Cosine     │────▸│   Ranked     │
+│ or Text      │     │  Similarity  │     │   Results    │
+└─────────────┘     └──────────────┘     └──────────────┘
+```
+
+1. **Indexing**: Each image → MobileNet V2 → 1024-dim embedding + top-5 classification tags
+2. **Storage**: Embeddings are L2-normalized and stored in IndexedDB with metadata + thumbnails
+3. **Image Search**: Query image → embed → cosine similarity against all stored vectors → rank
+4. **Text Search**: Query text → fuzzy match against AI tags + filenames → rank
+
+### Text Search — AI Tag Examples
+
+| Query | What MobileNet detects |
+|-------|----------------------|
+| "dog" | golden retriever, labrador, pug, beagle, husky |
+| "car" | sports car, minivan, pickup, convertible |
+| "cat" | tabby, persian, siamese, egyptian cat |
+| "food" | pizza, cheeseburger, ice cream, espresso |
+| "flower" | daisy, sunflower, rose hip, pot |
+| "bird" | robin, flamingo, pelican, hen |
+
+> **Note**: Text search uses ImageNet's 1000 class labels. It works best for common objects and animals. For more nuanced queries, use image-based search.
+
+## 🔧 Development
 
 ```bash
 # Start dev server with hot reload
 npm run dev
 
-# Then load the dist/ folder in Chrome
+# Type check
+npx tsc --noEmit
+
+# Production build
+npm run build
 ```
 
-Changes to React components will hot-reload automatically via CRXJS.
+## ☁️ Google Drive Setup (Optional)
 
-## Google Drive Setup (Optional)
+Google Drive integration is **optional**. The extension works fully for local images without it.
 
-Google Drive integration requires OAuth credentials. Without them, the extension works fully for **local images**.
+1. Create a [Google Cloud Project](https://console.cloud.google.com/)
+2. Enable **Google Drive API** and **Google Picker API**
+3. Create an **OAuth 2.0 Client ID** (Chrome Extension type)
+4. Update credentials in:
+   ```
+   src/shared/constants.ts  → GOOGLE_CLIENT_ID, GOOGLE_API_KEY
+   public/manifest.json     → oauth2.client_id
+   ```
+5. Rebuild and reload the extension
 
-### Setup Steps:
-
-1. **Create a Google Cloud Project**
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a new project
-
-2. **Enable APIs**
-   - Enable **Google Drive API**
-   - Enable **Google Picker API**
-
-3. **Create OAuth Credentials**
-   - Go to **APIs & Services → Credentials**
-   - Create an **OAuth 2.0 Client ID**
-   - Select **Chrome Extension** as application type
-   - Add your extension ID (found in `chrome://extensions/`)
-
-4. **Update Configuration**
-   - Replace `YOUR_CLIENT_ID` in **two files**:
-     ```
-     src/shared/constants.ts    → GOOGLE_CLIENT_ID
-     public/manifest.json       → oauth2.client_id
-     ```
-   - Replace `YOUR_GOOGLE_API_KEY` in:
-     ```
-     src/shared/constants.ts    → GOOGLE_API_KEY
-     ```
-
-5. **Rebuild and reload** the extension
-
-## Architecture
-
-```
-src/
-├── popup/              # Compact popup UI (quick search)
-├── dashboard/          # Full-page dashboard (indexing, search, settings)
-│   ├── components/     # React components
-│   └── hooks/          # Custom hooks (useSearch, useIndexing, useGoogleDrive)
-├── background/         # Service worker (context menu, message routing)
-├── content/            # Content script (right-click image capture)
-├── shared/             # Shared modules
-│   ├── embedding/      # TF.js MobileNet engine + cosine similarity
-│   ├── storage/        # IndexedDB via Dexie (metadata + embeddings)
-│   ├── google/         # OAuth + Drive API wrappers
-│   └── utils/          # Image processing, constants
-└── styles/             # CSS design system (light/dark themes)
-```
-
-### How Similarity Search Works
-
-1. **Indexing**: Each image is processed through MobileNet V2 to extract a 1024-dimensional embedding vector
-2. **Storage**: Embeddings are L2-normalized and stored in IndexedDB alongside image metadata
-3. **Search**: The query image is embedded, then cosine similarity is computed against all stored embeddings
-4. **Ranking**: Results are sorted by similarity score (highest first)
-
-### Swapping the Model
-
-The embedding engine uses a clean interface (`IEmbeddingEngine`). To use a different model:
-
-1. Implement the `IEmbeddingEngine` interface in `src/shared/embedding/engine.ts`
-2. Update `getEmbeddingEngine()` to return your new implementation
-3. Update `MODEL_VERSION` in constants
-
-## Tech Stack
+## 📦 Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | UI | React 18 + TypeScript |
 | Build | Vite + CRXJS Plugin |
-| AI | TensorFlow.js + MobileNet V2 |
+| AI Model | TensorFlow.js + MobileNet V2 |
 | Storage | IndexedDB (Dexie.js) |
 | Auth | chrome.identity OAuth 2.0 |
-| Cloud | Google Drive API |
+| Cloud | Google Drive API v3 |
 | Extension | Chrome Manifest V3 |
 
-## Privacy
+## 🔒 Privacy
 
-- **Local Processing**: All image analysis happens in your browser using TensorFlow.js
-- **Local Storage**: Embeddings and thumbnails are stored in IndexedDB
-- **No Uploads**: No images are sent to external servers
-- **Google Drive**: Only reads files you explicitly select via the picker
-- **Minimal Permissions**: `activeTab`, `contextMenus`, `storage`, `identity`
+This extension is **100% local**:
 
-## Limitations
+- **Local AI**: All image analysis runs in your browser via TensorFlow.js (WebGL/CPU)
+- **Local Storage**: Embeddings, thumbnails, and metadata stay in IndexedDB
+- **No Uploads**: Zero images or data are sent to any external server
+- **No Tracking**: No analytics, no telemetry, no third-party scripts
+- **Google Drive**: Only reads files you explicitly select (requires `drive.readonly` scope)
+
+## ⚠️ Limitations
 
 - **Model Size**: MobileNet weights are ~14MB, loaded on first use
-- **Index Size**: Recommended max ~5,000 images (configurable)
-- **Browser Only**: Embeddings are computed on CPU/WebGL, not GPU-optimized
-- **Drive Picker**: Uses a simplified file listing (full Google Picker requires additional setup)
+- **Index Size**: Recommended max ~5,000 images (configurable in settings)
+- **Text Search**: Limited to ImageNet's 1000 categories (not free-form language)
+- **File URLs**: "Allow access to file URLs" must be enabled in `chrome://extensions` for folder detection
+- **Browser Only**: Runs on CPU/WebGL — not GPU-optimized for very large collections
 
-## License
+## 📄 License
 
 MIT
