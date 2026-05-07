@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import * as tf from '@tensorflow/tfjs';
 import { getEmbeddingEngine } from '../../shared/embedding/engine';
 import {
   loadImage,
@@ -66,7 +67,7 @@ export function useIndexing() {
 
       setProgress((prev) => ({ ...prev, status: 'indexing' }));
 
-      const BATCH_SIZE = 5;
+      const BATCH_SIZE = 3;
       for (let i = 0; i < validFiles.length; i += BATCH_SIZE) {
         const batch = validFiles.slice(i, i + BATCH_SIZE);
 
@@ -149,8 +150,9 @@ export function useIndexing() {
           }
         }
 
-        // Yield to UI between batches
-        await new Promise((r) => setTimeout(r, 50));
+        // Yield to UI + WebGL GC between batches
+        await tf.nextFrame();
+        await new Promise((r) => setTimeout(r, 200));
       }
 
       setProgress((prev) => ({ ...prev, status: 'complete' }));
@@ -360,8 +362,9 @@ export function useIndexing() {
           }
         }
 
-        // Yield to UI between batches
-        await new Promise((r) => setTimeout(r, 50));
+        // Yield to UI + WebGL GC between batches
+        await tf.nextFrame();
+        await new Promise((r) => setTimeout(r, 200));
       }
 
       setProgress((prev) => ({ ...prev, status: 'complete' }));
