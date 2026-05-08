@@ -36,15 +36,28 @@
 
 ---
 
-## 📖 How to Use the Extension
+## 📖 How to Use the Extension (For GitHub Users)
 
-### 1. Installation
+If you're visiting this repository and want to try the extension, follow these simple steps to install it in your browser:
 
-1. Download or clone this repository and run `npm install` and `npm run build` to generate the extension files.
-2. Open Chrome (or Edge/Brave) and navigate to `chrome://extensions/`.
-3. Enable **Developer mode** using the toggle in the top-right corner.
-4. Click **"Load unpacked"** and select the `dist/` folder generated in step 1.
-5. **Important**: Click **"Details"** on the newly installed extension and enable **"Allow access to file URLs"**. This is required for the extension to scan your local folders!
+### 1. Download & Build
+
+1. **Download the code**: Click the green **"<> Code"** button at the top of this repository and select **"Download ZIP"**, then extract the folder (or clone the repo via `git clone`).
+2. **Open a terminal** and navigate into the extracted `ImgSearch` folder.
+3. **Install dependencies and build**:
+   ```bash
+   npm install
+   npm run build
+   ```
+   *(This will generate a `dist/` folder containing the actual extension files).*
+
+### 2. Install in Chrome (or Edge/Brave)
+
+1. Open your browser and navigate to `chrome://extensions/` (or `edge://extensions/`).
+2. Enable **"Developer mode"** using the toggle switch in the top-right corner.
+3. Click the **"Load unpacked"** button in the top-left.
+4. Select the newly generated `dist/` folder from inside the project directory.
+5. **Crucial Step**: Once installed, click the **"Details"** button on the ImgSearch extension card, scroll down, and turn ON **"Allow access to file URLs"**. (This is required so the extension can read and index your local photo folders).
 
 ### 2. Indexing Your Photos
 
